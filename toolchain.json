@@ -1,0 +1,20 @@
+{
+  "schema": "tool-lab/toolchain/v1",
+  "project": "bed-ledger",
+  "framework": "flutter",
+  "flutter_stable": "3.47.7",
+  "dart_sdk_version": "3.13.5",
+  "flutter_archive_linux_x64": "stable/linux/flutter_linux_3.47.7-stable.tar.xz",
+  "host_note": "Dev host is arm64 Linux; official Flutter SDK is x64-only, so workspace generation and builds run in CI (windows-latest / ubuntu x64 / GameCI-free lanes) or via the arm64 Dart-graft bootstrap. Never claim local Flutter verification from a probe.",
+  "application_id": "com.infinityball.bedledger",
+  "ios_bundle_identifier": "com.infinityball.bedledger",
+  "windows_identity_name": "cominfinityball.bedledger",
+  "asc_registration": "CREATED com.infinityball.bedledger (2026-10-17)",
+  "platforms_enabled": ["windows", "android", "ios"],
+  "tablet_support": "enabled",
+  "ux_strategy": "A-platform-native-adaptive",
+  "primary_ci_release_target": "windows-latest",
+  "mobile_ci": "flutter build apk --debug on Linux/Docker; iOS compile later on macOS",
+  "icon": "AppStore/icon.png (1024x1024 RGB, OpenAI Images gpt-image-2.5-flare, 2026-10-17)",
+  "network_policy": "none - app performs no network requests"
+}
