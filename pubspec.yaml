@@ -1,0 +1,19 @@
+name: bed_ledger
+description: "Offline garden-bed journal: beds, seasons, plantings and harvests. Local-first, no accounts, no network."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

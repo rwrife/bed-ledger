@@ -1,0 +1,27 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - windows/**
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    missing_required_param: error
+    missing_return: error
+
+linter:
+  rules:
+    - avoid_dynamic_calls
+    - avoid_print
+    - avoid_redundant_argument_values
+    - directives_ordering
+    - prefer_final_locals
+    - require_trailing_commas
+    - sort_constructors_first
+    - sort_unnamed_constructors_first
+    - unawaited_futures
