@@ -40,7 +40,9 @@ void main() {
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('bed-ledger-store');
-    live = File('${dir.path}/journal.json');
+    live = File(
+      '${dir.path}${Platform.pathSeparator}${FileJournalRepository.fileName}',
+    );
     repo = FileJournalRepository(dir);
   });
   tearDown(() => dir.deleteSync(recursive: true));
