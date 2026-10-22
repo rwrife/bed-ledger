@@ -164,18 +164,30 @@ final class Planting {
     required String crop,
     required this.date,
     String? position,
+    this.method,
   }) : id = _id(id),
        seasonId = _id(seasonId),
        crop = _text(crop, 'crop'),
-       position = _optional(position, 'position', max: 200);
+       position = _optional(position, 'position', max: 200) {
+    if (method != null && method != 'sow' && method != 'transplant') {
+      _bad('unknown planting method: $method');
+    }
+  }
 
-  factory Planting.fromJson(Map<String, Object?> json) => Planting(
-    id: _field<String>(json, 'id'),
-    seasonId: _field<String>(json, 'seasonId'),
-    crop: _field<String>(json, 'crop'),
-    date: Day.parse(_field<String>(json, 'date')),
-    position: _optionalField(json, 'position'),
-  );
+  factory Planting.fromJson(Map<String, Object?> json) {
+    final rawMethod = _optionalField(json, 'method');
+    if (rawMethod != null && rawMethod != 'sow' && rawMethod != 'transplant') {
+      _bad('unknown planting method: $rawMethod');
+    }
+    return Planting(
+      id: _field<String>(json, 'id'),
+      seasonId: _field<String>(json, 'seasonId'),
+      crop: _field<String>(json, 'crop'),
+      date: Day.parse(_field<String>(json, 'date')),
+      position: _optionalField(json, 'position'),
+      method: rawMethod,
+    );
+  }
 
   final String id;
   final String seasonId;
@@ -183,12 +195,16 @@ final class Planting {
   final Day date;
   final String? position;
 
+  /// Null for records saved before planting method was recorded.
+  final String? method;
+
   Map<String, Object?> toJson() => {
     'id': id,
     'seasonId': seasonId,
     'crop': crop,
     'date': date.toString(),
     'position': position,
+    'method': method,
   };
 }
 
@@ -311,6 +327,19 @@ final class Journal {
   final List<Season> seasons;
   final List<Planting> plantings;
   final List<Harvest> harvests;
+
+  /// Creates a new Journal with updated entities, re-validating all constraints.
+  Journal copyWith({
+    List<Bed>? beds,
+    List<Season>? seasons,
+    List<Planting>? plantings,
+    List<Harvest>? harvests,
+  }) => Journal(
+    beds: beds ?? this.beds,
+    seasons: seasons ?? this.seasons,
+    plantings: plantings ?? this.plantings,
+    harvests: harvests ?? this.harvests,
+  );
 
   /// Bed history in year order, ID as stable tie-break.
   List<Season> seasonsForBed(String bedId) =>

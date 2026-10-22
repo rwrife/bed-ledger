@@ -1,48 +1,65 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'data/file_journal_repository.dart';
+import 'domain/journal_controller.dart';
+import 'ui/journal_screen.dart';
+
 void main() => runApp(const BedLedgerApp());
 
-/// Bootstrap screen; journal and Fluent-style desktop navigation follow in
-/// later issues. No Android Material UI renders on Windows or iOS.
-class BedLedgerApp extends StatelessWidget {
-  const BedLedgerApp({super.key});
+/// ponytail: platform sandbox path via HOME on mobile; move to
+/// path_provider when platform-specific directory APIs are required.
+Directory journalDirectory() {
+  final root = Platform.isWindows
+      ? Platform.environment['APPDATA']
+      : Platform.environment['HOME'];
+  if (root == null || root.isEmpty) {
+    throw const FileSystemException('App storage directory unavailable');
+  }
+  return Directory('$root${Platform.pathSeparator}bed-ledger');
+}
+
+/// Root app shell. Supports Windows, Android and iOS from one codebase.
+class BedLedgerApp extends StatefulWidget {
+  const BedLedgerApp({super.key, this.controller});
+
+  /// Injectable for tests; production always uses app-private file storage.
+  final JournalController? controller;
+
+  @override
+  State<BedLedgerApp> createState() => _BedLedgerAppState();
+}
+
+class _BedLedgerAppState extends State<BedLedgerApp> {
+  late final JournalController controller =
+      widget.controller ??
+      JournalController(FileJournalRepository(journalDirectory()));
 
   @override
   Widget build(BuildContext context) {
-    const title = Text('Bed Ledger', key: Key('app-title'));
-    if (defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS) {
-      return const CupertinoApp(
+    final platform = defaultTargetPlatform;
+    final screen = JournalScreen(controller: controller);
+    if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
+      return CupertinoApp(
         title: 'Bed Ledger',
-        home: CupertinoPageScaffold(
-          navigationBar: CupertinoNavigationBar(middle: Text('Bed Ledger')),
-          child: Center(child: title),
-        ),
+        localizationsDelegates: const [DefaultMaterialLocalizations.delegate],
+        home: screen,
       );
     }
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    if (platform == TargetPlatform.android) {
       return MaterialApp(
         title: 'Bed Ledger',
         theme: ThemeData(useMaterial3: true),
-        home: const Scaffold(body: Center(child: title)),
+        home: screen,
       );
     }
-    return WidgetsApp(
-      color: const Color(0xfff3f3f3),
+    return MaterialApp(
       title: 'Bed Ledger',
-      onGenerateRoute: (_) => PageRouteBuilder<void>(
-        pageBuilder: (_, _, _) => const ColoredBox(
-          color: Color(0xfff3f3f3),
-          child: Center(
-            child: DefaultTextStyle(
-              style: TextStyle(color: Color(0xff202020), fontSize: 24),
-              child: title,
-            ),
-          ),
-        ),
-      ),
+      theme: ThemeData(platform: platform, useMaterial3: true),
+      home: screen,
     );
   }
 }
