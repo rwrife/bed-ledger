@@ -23,8 +23,9 @@ void main() {
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    await tester.binding.setSurfaceSize(const Size(1500, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.view.physicalSize = const Size(1500, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final repo = MemoryJournalRepository();
     await tester.pumpWidget(BedLedgerApp(controller: JournalController(repo)));
     await tester.pumpAndSettle();
