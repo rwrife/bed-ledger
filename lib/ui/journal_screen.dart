@@ -1,16 +1,12 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../domain/journal.dart';
 import '../domain/journal_controller.dart';
+import 'adaptive.dart';
 
 /// Master-detail journal screen: beds, their seasons, plantings and harvests.
 /// Pure recording — no advice, no predictions.
-///
-/// ponytail: adaptive widget layer (`AdaptiveScaffold`, keyboard shortcuts,
-/// goldens) is issue #5; this screen renders a functional master-detail on
-/// every platform and keeps all acceptance behavior testable.
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key, required this.controller});
 
@@ -21,6 +17,8 @@ class JournalScreen extends StatefulWidget {
 }
 
 class _JournalScreenState extends State<JournalScreen> {
+  int _mobilePaneIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -34,60 +32,37 @@ class _JournalScreenState extends State<JournalScreen> {
   Widget build(BuildContext context) {
     final state = widget.controller.state;
     final body = switch (state) {
-      JournalLoading() => _LoadingView(key: UniqueKey()),
+      JournalLoading() => const _LoadingView(key: Key('loading-view')),
       JournalError(:final message, :final path, :final newerSchemaVersion) =>
         _ErrorView(
-          key: UniqueKey(),
+          key: const Key('error-view'),
           message: message,
           path: path,
           newerSchemaVersion: newerSchemaVersion,
           onStartFresh: () => widget.controller.startFresh(),
         ),
-      JournalReady() => _ReadyView(ready: state, controller: widget.controller),
+      JournalReady() => _ReadyView(
+        ready: state,
+        controller: widget.controller,
+        mobilePaneIndex: _mobilePaneIndex,
+        onSelectMobilePane: (index) => setState(() => _mobilePaneIndex = index),
+      ),
     };
-    return _Shell(title: 'Bed Ledger', body: body);
-  }
-}
-
-class _Shell extends StatelessWidget {
-  const _Shell({required this.title, required this.body});
-
-  final String title;
-  final Widget body;
-
-  @override
-  Widget build(BuildContext context) {
-    final platform = defaultTargetPlatform;
-    if (platform == TargetPlatform.android) {
-      return Scaffold(
-        appBar: AppBar(title: Text(title, key: const Key('app-title'))),
+    final canStepBack =
+        state is JournalReady &&
+        !WorkspaceLayout.usePanes(context) &&
+        _mobilePaneIndex > 0;
+    return PopScope(
+      canPop: !canStepBack,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && canStepBack) {
+          setState(() => _mobilePaneIndex--);
+        }
+      },
+      child: AdaptiveScaffold(
+        title: 'Bed Ledger',
         body: body,
-      );
-    }
-    return ColoredBox(
-      color: const Color(0xff1d1d1d),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Text(
-                    title,
-                    key: const Key('app-title'),
-                    style: const TextStyle(
-                      color: Color(0xfff3f3f3),
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(child: body),
-          ],
-        ),
+        onBack: canStepBack ? () => setState(() => _mobilePaneIndex--) : null,
       ),
     );
   }
@@ -138,7 +113,7 @@ class _ErrorView extends StatelessWidget {
             ),
             Text(path, key: const Key('error-path')),
             const SizedBox(height: 16),
-            _ActionLink(
+            AdaptiveButton(
               key: const Key('start-fresh'),
               label: 'Start a fresh journal (keeps the old file)',
               onPressed: onStartFresh,
@@ -151,29 +126,27 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _ReadyView extends StatelessWidget {
-  const _ReadyView({required this.ready, required this.controller});
+  const _ReadyView({
+    required this.ready,
+    required this.controller,
+    required this.mobilePaneIndex,
+    required this.onSelectMobilePane,
+  });
 
   final JournalReady ready;
   final JournalController controller;
+  final int mobilePaneIndex;
+  final ValueChanged<int> onSelectMobilePane;
 
   @override
   Widget build(BuildContext context) {
     final journal = ready.journal;
-    return LayoutBuilder(
-      builder: (context, constraints) => constraints.maxWidth < 700
-          ? ListView(
-              children: [
-                SizedBox(height: 180, child: _buildBedPane(context, journal)),
-                SizedBox(height: 600, child: _buildSeasonPane(context)),
-              ],
-            )
-          : Row(
-              children: [
-                SizedBox(width: 200, child: _buildBedPane(context, journal)),
-                const VerticalDivider(width: 1, color: Color(0xff333333)),
-                Expanded(child: _buildSeasonPane(context)),
-              ],
-            ),
+    return WorkspaceLayout(
+      page: mobilePaneIndex,
+      onPageSelected: onSelectMobilePane,
+      beds: _buildBedPane(context, journal),
+      seasons: _buildSeasonPane(context),
+      plantings: _buildPlantingPane(context),
     );
   }
 
@@ -199,7 +172,7 @@ class _ReadyView extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              _ActionLink(
+              AdaptiveButton(
                 key: const Key('add-bed'),
                 label: 'Add',
                 onPressed: () => _promptBedForm(context),
@@ -215,14 +188,17 @@ class _ReadyView extends StatelessWidget {
                   key: Key('bed-${bed.id}'),
                   label: bed.name,
                   selected: bed.id == ready.selectedBedId,
-                  onTap: () => controller.selectBed(bed.id),
+                  onTap: () {
+                    controller.selectBed(bed.id);
+                    onSelectMobilePane(1);
+                  },
                   actions: [
-                    _ActionLink(
+                    AdaptiveButton(
                       key: Key('edit-bed-${bed.id}'),
                       label: 'Edit',
                       onPressed: () => _promptBedForm(context, bed: bed),
                     ),
-                    _ActionLink(
+                    AdaptiveButton(
                       key: Key('delete-bed-${bed.id}'),
                       label: 'Delete',
                       onPressed: () => _confirm(
@@ -263,7 +239,7 @@ class _ReadyView extends StatelessWidget {
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
-              _ActionLink(
+              AdaptiveButton(
                 key: const Key('add-season'),
                 label: 'Add season',
                 onPressed: () => _promptSeasonForm(context, bed.id),
@@ -282,42 +258,35 @@ class _ReadyView extends StatelessWidget {
           )
         else
           Expanded(
-            child: Row(
+            child: ListView(
+              key: const Key('season-list'),
               children: [
-                SizedBox(
-                  width: 180,
-                  child: ListView(
-                    key: const Key('season-list'),
-                    children: [
-                      for (final season in seasons)
-                        _Tile(
-                          key: Key('season-${season.id}'),
-                          label: '${season.name} ${season.year}',
-                          selected: season.id == ready.selectedSeasonId,
-                          onTap: () => controller.selectSeason(season.id),
-                          actions: [
-                            _ActionLink(
-                              key: Key('delete-season-${season.id}'),
-                              label: 'Delete',
-                              onPressed: () => _confirm(
-                                context,
-                                title:
-                                    'Delete season '
-                                    '“${season.name} ${season.year}”?',
-                                message:
-                                    'Its plantings and harvests are '
-                                    'also deleted.',
-                                onConfirm: () =>
-                                    controller.deleteSeason(season.id),
-                              ),
-                            ),
-                          ],
+                for (final season in seasons)
+                  _Tile(
+                    key: Key('season-${season.id}'),
+                    label: '${season.name} ${season.year}',
+                    selected: season.id == ready.selectedSeasonId,
+                    onTap: () {
+                      controller.selectSeason(season.id);
+                      onSelectMobilePane(2);
+                    },
+                    actions: [
+                      AdaptiveButton(
+                        key: Key('delete-season-${season.id}'),
+                        label: 'Delete',
+                        onPressed: () => _confirm(
+                          context,
+                          title:
+                              'Delete season '
+                              '“${season.name} ${season.year}”?',
+                          message:
+                              'Its plantings and harvests are '
+                              'also deleted.',
+                          onConfirm: () => controller.deleteSeason(season.id),
                         ),
+                      ),
                     ],
                   ),
-                ),
-                const VerticalDivider(width: 1, color: Color(0xff333333)),
-                Expanded(child: _buildPlantingPane(context)),
               ],
             ),
           ),
@@ -345,7 +314,7 @@ class _ReadyView extends StatelessWidget {
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
-              _ActionLink(
+              AdaptiveButton(
                 key: const Key('add-planting'),
                 label: 'Sow / transplant',
                 onPressed: () => _promptPlantingForm(context, season),
@@ -609,16 +578,16 @@ class _ReadyView extends StatelessWidget {
     BuildContext context, {
     required String title,
     required List<_FormField> fields,
-  }) => showDialog<Map<String, String>>(
-    context: context,
-    builder: (dialogContext) =>
+  }) => showAppDialog<Map<String, String>>(
+    context,
+    (dialogContext) =>
         _FormDialog(key: UniqueKey(), title: title, fields: fields),
   );
 
   Future<void> _showFormError(BuildContext context, String message) =>
-      showDialog<void>(
-        context: context,
-        builder: (dialogContext) => _MessageDialog(
+      showAppDialog<void>(
+        context,
+        (dialogContext) => _MessageDialog(
           key: UniqueKey(),
           message: message,
           messageKey: const Key('form-error'),
@@ -631,9 +600,9 @@ class _ReadyView extends StatelessWidget {
     required String message,
     required VoidCallback onConfirm,
   }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) =>
+    final result = await showAppDialog<bool>(
+      context,
+      (dialogContext) =>
           _ConfirmDialog(key: UniqueKey(), title: title, message: message),
     );
     if (result == true) onConfirm();
@@ -674,12 +643,12 @@ class _PlantingTile extends StatelessWidget {
                   key: Key('planting-label-${planting.id}'),
                 ),
               ),
-              _ActionLink(
+              AdaptiveButton(
                 key: Key('add-harvest-${planting.id}'),
                 label: 'Log harvest',
                 onPressed: onAddHarvest,
               ),
-              _ActionLink(
+              AdaptiveButton(
                 key: Key('delete-planting-${planting.id}'),
                 label: 'Delete',
                 onPressed: onDeletePlanting,
@@ -707,7 +676,7 @@ class _PlantingTile extends StatelessWidget {
                                 '${harvest.quantity} ${harvest.unit}',
                     ),
                   ),
-                  _ActionLink(
+                  AdaptiveButton(
                     key: Key('delete-harvest-${harvest.id}'),
                     label: 'Delete',
                     onPressed: () => onDeleteHarvest(harvest),
@@ -736,24 +705,19 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              key: Key('label-$label'),
-              style: TextStyle(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-              ),
-            ),
-            if (actions.isNotEmpty) Wrap(children: actions),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AdaptiveButton(
+            key: Key('label-$label'),
+            label: label,
+            selected: selected,
+            onPressed: onTap,
+          ),
+          if (actions.isNotEmpty) Wrap(children: actions),
+        ],
       ),
     );
   }
@@ -782,7 +746,7 @@ class _EmptyState extends StatelessWidget {
           Text(message, key: const Key('empty-state')),
           if (actionLabel != null) ...[
             const SizedBox(height: 8),
-            _ActionLink(
+            AdaptiveButton(
               key: actionKey ?? const Key('empty-state-action'),
               label: actionLabel!,
               onPressed: onAction!,
@@ -790,23 +754,6 @@ class _EmptyState extends StatelessWidget {
           ],
         ],
       ),
-    ),
-  );
-}
-
-class _ActionLink extends StatelessWidget {
-  const _ActionLink({super.key, required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    behavior: HitTestBehavior.opaque,
-    onTap: onPressed,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: Text(label, style: const TextStyle(color: Color(0xff4da3ff))),
     ),
   );
 }
@@ -886,81 +833,136 @@ class _FormDialogState extends State<_FormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    if (isApplePlatform) {
+      return CupertinoAlertDialog(
+        title: Text(widget.title, key: const Key('form-title')),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final field in widget.fields) ...[
+                Text(field.label),
+                if (field.allowed == null)
+                  CupertinoTextField(
+                    key: field.key,
+                    controller: _controllers[field.label],
+                    placeholder: field.dateHint ? 'YYYY-MM-DD' : null,
+                  )
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (final option in field.allowed!)
+                        Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: GestureDetector(
+                            key: Key('${field.label.toLowerCase()}-$option'),
+                            onTap: () => setState(
+                              () => _selection[field.label] = option,
+                            ),
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                fontWeight: _selection[field.label] == option
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 6),
+              ],
+              if (_error != null)
+                Text(
+                  _error!,
+                  key: const Key('field-validation'),
+                  style: const TextStyle(color: CupertinoColors.destructiveRed),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            key: const Key('form-cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            key: const Key('form-save'),
+            isDefaultAction: true,
+            onPressed: _submit,
+            child: const Text('Save'),
+          ),
+        ],
+      );
+    }
+    return AlertDialog(
+      title: Text(widget.title, key: const Key('form-title')),
+      content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.title, key: const Key('form-title')),
-            const SizedBox(height: 12),
-            for (final field in widget.fields)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            for (final field in widget.fields) ...[
+              Text(field.label),
+              const SizedBox(height: 4),
+              if (field.allowed == null)
+                TextField(
+                  key: field.key,
+                  controller: _controllers[field.label],
+                  decoration: InputDecoration(
+                    hintText: field.dateHint ? 'YYYY-MM-DD' : null,
+                    isDense: true,
+                  ),
+                )
+              else
+                Row(
                   children: [
-                    Text(field.label),
-                    if (field.allowed == null)
-                      CupertinoTextField(
-                        key: field.key,
-                        controller: _controllers[field.label],
-                        placeholder: field.dateHint ? 'YYYY-MM-DD' : null,
-                      )
-                    else
-                      Row(
-                        children: [
-                          for (final option in field.allowed!)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: GestureDetector(
-                                key: Key(
-                                  '${field.label.toLowerCase()}-$option',
-                                ),
-                                onTap: () => setState(
-                                  () => _selection[field.label] = option,
-                                ),
-                                child: Text(
-                                  option,
-                                  style: TextStyle(
-                                    fontWeight:
-                                        _selection[field.label] == option
-                                        ? FontWeight.w700
-                                        : FontWeight.w400,
-                                  ),
-                                ),
-                              ),
+                    for (final option in field.allowed!)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: GestureDetector(
+                          key: Key('${field.label.toLowerCase()}-$option'),
+                          onTap: () =>
+                              setState(() => _selection[field.label] = option),
+                          child: Text(
+                            option,
+                            style: TextStyle(
+                              fontWeight: _selection[field.label] == option
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
                             ),
-                        ],
+                          ),
+                        ),
                       ),
                   ],
                 ),
-              ),
+              const SizedBox(height: 8),
+            ],
             if (_error != null)
               Text(
                 _error!,
                 key: const Key('field-validation'),
                 style: const TextStyle(color: Color(0xffff6b6b)),
               ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _ActionLink(
-                  key: const Key('form-cancel'),
-                  label: 'Cancel',
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                _ActionLink(
-                  key: const Key('form-save'),
-                  label: 'Save',
-                  onPressed: _submit,
-                ),
-              ],
-            ),
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          key: const Key('form-cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('form-save'),
+          onPressed: _submit,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
@@ -972,35 +974,43 @@ class _ConfirmDialog extends StatelessWidget {
   final String message;
 
   @override
-  Widget build(BuildContext context) => Dialog(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, key: const Key('confirm-title')),
-          const SizedBox(height: 8),
-          Text(message),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _ActionLink(
-                key: const Key('confirm-cancel'),
-                label: 'Cancel',
-                onPressed: () => Navigator.of(context).pop(false),
-              ),
-              _ActionLink(
-                key: const Key('confirm-delete'),
-                label: 'Delete',
-                onPressed: () => Navigator.of(context).pop(true),
-              ),
-            ],
+  Widget build(BuildContext context) {
+    if (isApplePlatform) {
+      return CupertinoAlertDialog(
+        title: Text(title, key: const Key('confirm-title')),
+        content: Text(message),
+        actions: [
+          CupertinoDialogAction(
+            key: const Key('confirm-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            key: const Key('confirm-delete'),
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
           ),
         ],
-      ),
-    ),
-  );
+      );
+    }
+    return AlertDialog(
+      title: Text(title, key: const Key('confirm-title')),
+      content: Text(message),
+      actions: [
+        TextButton(
+          key: const Key('confirm-cancel'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('confirm-delete'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    );
+  }
 }
 
 class _MessageDialog extends StatelessWidget {
@@ -1014,28 +1024,30 @@ class _MessageDialog extends StatelessWidget {
   final Key messageKey;
 
   @override
-  Widget build(BuildContext context) => Dialog(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(message, key: messageKey),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _ActionLink(
-                key: const Key('message-ok'),
-                label: 'OK',
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
+  Widget build(BuildContext context) {
+    if (isApplePlatform) {
+      return CupertinoAlertDialog(
+        content: Text(message, key: messageKey),
+        actions: [
+          CupertinoDialogAction(
+            key: const Key('message-ok'),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
           ),
         ],
-      ),
-    ),
-  );
+      );
+    }
+    return AlertDialog(
+      content: Text(message, key: messageKey),
+      actions: [
+        FilledButton(
+          key: const Key('message-ok'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
 }
 
 String _today() {

@@ -53,12 +53,30 @@ class _BedLedgerAppState extends State<BedLedgerApp> {
       return MaterialApp(
         title: 'Bed Ledger',
         theme: ThemeData(useMaterial3: true),
+        highContrastTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: const ColorScheme.highContrastLight(),
+        ),
+        highContrastDarkTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: const ColorScheme.highContrastDark(),
+        ),
         home: screen,
       );
     }
     return MaterialApp(
       title: 'Bed Ledger',
       theme: ThemeData(platform: platform, useMaterial3: true),
+      highContrastTheme: ThemeData(
+        platform: platform,
+        useMaterial3: true,
+        colorScheme: const ColorScheme.highContrastLight(),
+      ),
+      highContrastDarkTheme: ThemeData(
+        platform: platform,
+        useMaterial3: true,
+        colorScheme: const ColorScheme.highContrastDark(),
+      ),
       home: screen,
     );
   }
