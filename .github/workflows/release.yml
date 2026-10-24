@@ -7,8 +7,13 @@ on:
     inputs:
       tag:
         description: Existing v* tag to publish (must point at checked-out commit)
-        required: true
+        required: false
         type: string
+      dry_run:
+        description: Build and package without creating a release
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: write
@@ -26,6 +31,7 @@ jobs:
     steps:
       - name: Verify release tag
         id: release
+        if: ${{ inputs.dry_run != true || inputs.tag != '' }}
         shell: pwsh
         env:
           INPUT_TAG: ${{ inputs.tag }}
@@ -38,6 +44,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
       - name: Check tag points at checked-out commit
+        if: ${{ steps.release.outputs.tag != '' }}
         shell: pwsh
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
@@ -65,11 +72,19 @@ jobs:
           $source = 'build/windows/x64/runner/Release'
           if (!(Test-Path "$source/bed_ledger.exe")) { throw 'Windows executable missing' }
           if (!(Test-Path "$source/data/flutter_assets")) { throw 'Flutter assets missing' }
-          $zip = "bed-ledger-$env:RELEASE_TAG-windows-x64.zip"
+          $label = if ($env:RELEASE_TAG) { $env:RELEASE_TAG } else { 'dry-run' }
+          $zip = "bed-ledger-$label-windows-x64.zip"
           Compress-Archive -Path "$source/*" -DestinationPath $zip -Force
           if (!(Test-Path $zip)) { throw 'Portable ZIP missing' }
           "RELEASE_ZIP=$zip" >> $env:GITHUB_ENV
+      - name: Upload dry-run artifact
+        if: ${{ inputs.dry_run == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable-dry-run
+          path: ${{ env.RELEASE_ZIP }}
       - name: Publish GitHub release
+        if: ${{ steps.release.outputs.tag != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
