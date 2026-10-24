@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../data/backup_file_gateway.dart';
+import '../data/portability.dart';
 import '../domain/journal.dart';
 import '../domain/journal_controller.dart';
 import 'adaptive.dart';
@@ -8,9 +12,14 @@ import 'adaptive.dart';
 /// Master-detail journal screen: beds, their seasons, plantings and harvests.
 /// Pure recording — no advice, no predictions.
 class JournalScreen extends StatefulWidget {
-  const JournalScreen({super.key, required this.controller});
+  const JournalScreen({
+    super.key,
+    required this.controller,
+    this.backupGateway = const FilePickerBackupGateway(),
+  });
 
   final JournalController controller;
+  final BackupFileGateway backupGateway;
 
   @override
   State<JournalScreen> createState() => _JournalScreenState();
@@ -18,6 +27,7 @@ class JournalScreen extends StatefulWidget {
 
 class _JournalScreenState extends State<JournalScreen> {
   int _mobilePaneIndex = 0;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -63,7 +73,203 @@ class _JournalScreenState extends State<JournalScreen> {
         title: 'Bed Ledger',
         body: body,
         onBack: canStepBack ? () => setState(() => _mobilePaneIndex--) : null,
+        actions: state is JournalReady
+            ? [
+                AdaptiveButton(
+                  key: const Key('files-menu'),
+                  label: 'Files',
+                  onPressed: () {
+                    if (!_busy) unawaited(_openFilesMenu());
+                  },
+                ),
+              ]
+            : const [],
       ),
+    );
+  }
+
+  Future<void> _openFilesMenu() async {
+    final choice = await showAppDialog<String>(
+      context,
+      (dialogContext) => _FilesDialog(key: UniqueKey()),
+    );
+    if (!mounted || _busy) return;
+    if (choice == 'json') unawaited(_exportBackup());
+    if (choice == 'csv') unawaited(_exportCsv());
+    if (choice == 'restore') unawaited(_restoreBackup());
+  }
+
+  Future<void> _exportBackup() => _saveFile(
+    () => widget.controller.backup(),
+    'bed-ledger-backup.json',
+    'application/json',
+  );
+
+  Future<void> _exportCsv() => _saveFile(
+    () => widget.controller.harvestCsv(),
+    'bed-ledger-harvests.csv',
+    'text/csv',
+  );
+
+  Future<void> _saveFile(
+    String Function() content,
+    String fileName,
+    String mimeType,
+  ) async {
+    setState(() => _busy = true);
+    try {
+      final saved = await widget.backupGateway.writeText(
+        fileName,
+        content(),
+        mimeType: mimeType,
+      );
+      if (mounted && !saved) {
+        await _showMessage('Export cancelled. Nothing was written.');
+      }
+    } on Object catch (error) {
+      if (mounted) await _showMessage('Export failed: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    setState(() => _busy = true);
+    try {
+      final source = await widget.backupGateway.readBackup();
+      if (source == null || !mounted) return;
+      final preview = widget.controller.previewRestore(source);
+      final confirmed = await showAppDialog<bool>(
+        context,
+        (dialogContext) => _RestoreDialog(key: UniqueKey(), preview: preview),
+      );
+      if (confirmed != true) return;
+      await widget.controller.restore(preview.journal);
+      if (mounted) {
+        await _showMessage(
+          'Restored ${preview.added} record(s); '
+          'kept ${preview.conflicts.length} conflicting record(s) unchanged.',
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) await _showMessage('Restore failed: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _showMessage(String message) => showAppDialog<void>(
+    context,
+    (dialogContext) => _MessageDialog(
+      key: UniqueKey(),
+      message: message,
+      messageKey: const Key('message'),
+    ),
+  );
+}
+
+class _FilesDialog extends StatelessWidget {
+  const _FilesDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    void choose(String value) => Navigator.of(context).pop(value);
+    if (isApplePlatform) {
+      return CupertinoAlertDialog(
+        title: const Text('Journal files'),
+        actions: [
+          CupertinoDialogAction(
+            key: const Key('export-backup'),
+            onPressed: () => choose('json'),
+            child: const Text('Export JSON backup'),
+          ),
+          CupertinoDialogAction(
+            key: const Key('export-csv'),
+            onPressed: () => choose('csv'),
+            child: const Text('Export harvest CSV'),
+          ),
+          CupertinoDialogAction(
+            key: const Key('restore-backup'),
+            onPressed: () => choose('restore'),
+            child: const Text('Restore JSON backup'),
+          ),
+          CupertinoDialogAction(
+            key: const Key('files-cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      );
+    }
+    return AlertDialog(
+      title: const Text('Journal files'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (key, label, value) in [
+            (const Key('export-backup'), 'Export JSON backup', 'json'),
+            (const Key('export-csv'), 'Export harvest CSV', 'csv'),
+            (const Key('restore-backup'), 'Restore JSON backup', 'restore'),
+          ])
+            ListTile(key: key, title: Text(label), onTap: () => choose(value)),
+        ],
+      ),
+      actions: [
+        TextButton(
+          key: const Key('files-cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
+class _RestoreDialog extends StatelessWidget {
+  const _RestoreDialog({super.key, required this.preview});
+
+  final RestorePreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final message =
+        'Import ${preview.added} new record(s)? '
+        '${preview.conflicts.length} conflicting record(s) will keep their '
+        'existing values. Existing journal remains on this device.';
+    final content = Text(message, key: const Key('restore-preview'));
+    if (isApplePlatform) {
+      return CupertinoAlertDialog(
+        title: const Text('Restore backup'),
+        content: content,
+        actions: [
+          CupertinoDialogAction(
+            key: const Key('restore-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            key: const Key('restore-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Import'),
+          ),
+        ],
+      );
+    }
+    return AlertDialog(
+      title: const Text('Restore backup'),
+      content: content,
+      actions: [
+        TextButton(
+          key: const Key('restore-cancel'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('restore-confirm'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Import'),
+        ),
+      ],
     );
   }
 }

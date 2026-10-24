@@ -1,0 +1,101 @@
+name: Windows release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v* tag to publish (must point at checked-out commit)
+        required: false
+        type: string
+      dry_run:
+        description: Build and package without creating a release
+        type: boolean
+        default: false
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.47.7'
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Verify release tag
+        id: release
+        if: ${{ inputs.dry_run != true || inputs.tag != '' }}
+        shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $tag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_TAG } else { $env:GITHUB_REF_NAME }
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:[-.][0-9A-Za-z.-]+)?$') { throw "Invalid release tag: $tag" }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Check tag points at checked-out commit
+        if: ${{ steps.release.outputs.tag != '' }}
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git fetch origin "refs/tags/$env:RELEASE_TAG:refs/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Release tag not found' }
+          $tagSha = git rev-parse "$env:RELEASE_TAG^{commit}"
+          $headSha = git rev-parse HEAD
+          if ($tagSha -ne $headSha) { throw 'Release tag must point at checked-out commit' }
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: git diff --exit-code
+      - run: dart format --output=none --set-exit-if-changed .
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build windows --release
+      - name: Package portable Windows release
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          $source = 'build/windows/x64/runner/Release'
+          if (!(Test-Path "$source/bed_ledger.exe")) { throw 'Windows executable missing' }
+          if (!(Test-Path "$source/data/flutter_assets")) { throw 'Flutter assets missing' }
+          $label = if ($env:RELEASE_TAG) { $env:RELEASE_TAG } else { 'dry-run' }
+          $zip = "bed-ledger-$label-windows-x64.zip"
+          Compress-Archive -Path "$source/*" -DestinationPath $zip -Force
+          if (!(Test-Path $zip)) { throw 'Portable ZIP missing' }
+          "RELEASE_ZIP=$zip" >> $env:GITHUB_ENV
+      - name: Upload dry-run artifact
+        if: ${{ inputs.dry_run == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable-dry-run
+          path: ${{ env.RELEASE_ZIP }}
+      - name: Publish GitHub release
+        if: ${{ steps.release.outputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        shell: pwsh
+        run: |
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:RELEASE_TAG --title "Bed Ledger $env:RELEASE_TAG" --notes "Portable Windows release. Download ZIP, extract, run bed_ledger.exe. Data stays on device."
+            if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
+          }
+          gh release upload $env:RELEASE_TAG $env:RELEASE_ZIP --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Asset upload failed' }
+          gh release view $env:RELEASE_TAG --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { throw 'Release verification failed' }

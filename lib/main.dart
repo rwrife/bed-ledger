@@ -1,47 +1,43 @@
-import 'dart:io';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
+import 'data/backup_file_gateway.dart';
 import 'data/file_journal_repository.dart';
 import 'domain/journal_controller.dart';
 import 'ui/journal_screen.dart';
 
-void main() => runApp(const BedLedgerApp());
-
-/// ponytail: platform sandbox path via HOME on mobile; move to
-/// path_provider when platform-specific directory APIs are required.
-Directory journalDirectory() {
-  final root = Platform.isWindows
-      ? Platform.environment['APPDATA']
-      : Platform.environment['HOME'];
-  if (root == null || root.isEmpty) {
-    throw const FileSystemException('App storage directory unavailable');
-  }
-  return Directory('$root${Platform.pathSeparator}bed-ledger');
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final directory = await getApplicationSupportDirectory();
+  runApp(
+    BedLedgerApp(
+      controller: JournalController(FileJournalRepository(directory)),
+    ),
+  );
 }
 
 /// Root app shell. Supports Windows, Android and iOS from one codebase.
 class BedLedgerApp extends StatefulWidget {
-  const BedLedgerApp({super.key, this.controller});
+  const BedLedgerApp({super.key, required this.controller, this.backupGateway});
 
   /// Injectable for tests; production always uses app-private file storage.
-  final JournalController? controller;
+  final JournalController controller;
+  final BackupFileGateway? backupGateway;
 
   @override
   State<BedLedgerApp> createState() => _BedLedgerAppState();
 }
 
 class _BedLedgerAppState extends State<BedLedgerApp> {
-  late final JournalController controller =
-      widget.controller ??
-      JournalController(FileJournalRepository(journalDirectory()));
-
   @override
   Widget build(BuildContext context) {
     final platform = defaultTargetPlatform;
-    final screen = JournalScreen(controller: controller);
+    final screen = JournalScreen(
+      controller: widget.controller,
+      backupGateway: widget.backupGateway ?? const FilePickerBackupGateway(),
+    );
     if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
       return CupertinoApp(
         title: 'Bed Ledger',

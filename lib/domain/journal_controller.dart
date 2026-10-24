@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../data/journal_repository.dart';
+import '../data/portability.dart';
 import '../domain/journal.dart';
 
 /// State of the interactive garden journal.
@@ -389,6 +390,42 @@ class JournalController {
     );
     await _repository.save(nextJournal);
     _setState(current.copyWith(journal: nextJournal));
+  }
+
+  RestorePreview previewRestore(String source) {
+    final current = _state;
+    if (current is! JournalReady) {
+      throw StateError('journal not ready');
+    }
+    return previewBackup(source, current.journal);
+  }
+
+  Future<void> restore(Journal restored) async {
+    final current = _state;
+    if (current is! JournalReady) {
+      throw StateError('journal not ready');
+    }
+    await _repository.save(restored);
+    final String? nextBedId;
+    if (current.selectedBedId != null &&
+        restored.beds.any((b) => b.id == current.selectedBedId)) {
+      nextBedId = current.selectedBedId;
+    } else {
+      nextBedId = restored.beds.isEmpty ? null : restored.beds.first.id;
+    }
+    _setState(JournalReady(journal: restored, selectedBedId: nextBedId));
+  }
+
+  String backup() {
+    final current = _state;
+    if (current is! JournalReady) throw StateError('journal not ready');
+    return exportBackup(current.journal);
+  }
+
+  String harvestCsv() {
+    final current = _state;
+    if (current is! JournalReady) throw StateError('journal not ready');
+    return exportHarvestCsv(current.journal);
   }
 
   Future<void> startFresh() async {

@@ -28,7 +28,7 @@ Data stays on device. No network requests, analytics, advertising, or account. F
 
 ## Status and milestones
 
-Flutter bootstrap and CI scaffold in place. Next: domain/storage, garden journal, adaptive UI, backup/export, then Windows release. `AppStore/description.txt` is draft listing copy. `AppStore/icon.png` is generated source art (OpenAI Images `gpt-image-2.5-flare`); platform icons still use Flutter defaults until issue #7. Local ARM64 analysis and widget tests pass; Windows/Android/iOS build evidence belongs to linked CI runs, not host. No mobile store submission or physical device testing claimed.
+Bed/season/planting/harvest domain, private JSON persistence, adaptive UI and user-initiated backup import/export exist. `AppStore/description.txt` is draft listing copy. `AppStore/icon.png` is generated source art (OpenAI Images `gpt-image-2.5-flare`); platform icons still use Flutter defaults until issue #7. Windows/Android/iOS build evidence belongs to linked CI runs, not host. No mobile store submission or physical device testing claimed.
 
 Bundle/application ID: `com.infinityball.bedledger` on Android/iOS; Windows identity `cominfinityball.bedledger` where MSIX rules require no reverse-DNS dots after vendor. App Store Connect bundle registration: `CREATED com.infinityball.bedledger`. Repository Actions secrets configured: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (names only); TestFlight/Play submission deferred.
 
