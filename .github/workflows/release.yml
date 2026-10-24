@@ -49,9 +49,12 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
-          git fetch origin "refs/tags/$env:RELEASE_TAG:refs/tags/$env:RELEASE_TAG"
+          # "$env:X:..." parses as one variable name in PowerShell; use a plain variable.
+          $tag = $env:RELEASE_TAG
+          $refspec = 'refs/tags/' + $tag + ':refs/tags/' + $tag
+          git fetch origin $refspec
           if ($LASTEXITCODE -ne 0) { throw 'Release tag not found' }
-          $tagSha = git rev-parse "$env:RELEASE_TAG^{commit}"
+          $tagSha = git rev-parse ($tag + '^{commit}')
           $headSha = git rev-parse HEAD
           if ($tagSha -ne $headSha) { throw 'Release tag must point at checked-out commit' }
       - uses: subosito/flutter-action@v2
@@ -84,7 +87,7 @@ jobs:
           name: windows-portable-dry-run
           path: ${{ env.RELEASE_ZIP }}
       - name: Publish GitHub release
-        if: ${{ steps.release.outputs.tag != '' }}
+        if: ${{ steps.release.outputs.tag != '' && inputs.dry_run != true }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
