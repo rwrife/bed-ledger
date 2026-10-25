@@ -12,7 +12,7 @@ Create a named bed with optional dimensions and notes. Add a season, record a cr
 
 ## MVP
 
-- Flutter 3.47.7 / Dart 3.13.5 single codebase: Windows desktop first, Android phones/tablets and iPhone/iPad enabled. Platform folders `windows/`, `android/`, `ios/` exist. App currently boots a minimal platform-aware title screen; journal behavior lands in later issues.
+- Flutter 3.47.7 / Dart 3.13.5 single codebase: Windows desktop first, Android phones/tablets and iPhone/iPad enabled. Platform folders `windows/`, `android/`, `ios/` exist. Bed, season, planting, harvest, backup and export flows are implemented.
 - Local bed, season, planting and harvest records; no crop database or recommendations.
 - Adaptive layouts and keyboard/mouse + touch. UX strategy A: Fluent-style Windows, Material 3 Android, Cupertino iOS/iPadOS behind a small adaptive-widget layer. Never cross-render another platform's visual system.
 - Accessible large text, high contrast, screen readers and Windows keyboard navigation.
@@ -28,7 +28,7 @@ Data stays on device. No network requests, analytics, advertising, or account. F
 
 ## Status and milestones
 
-Bed/season/planting/harvest domain, private JSON persistence, adaptive UI and user-initiated backup import/export exist. `AppStore/description.txt` is draft listing copy. `AppStore/icon.png` is generated source art (OpenAI Images `gpt-image-2.5-flare`); platform icons still use Flutter defaults until issue #7. Windows/Android/iOS build evidence belongs to linked CI runs, not host. No mobile store submission or physical device testing claimed.
+Bed/season/planting/harvest domain, private JSON persistence, adaptive UI and user-initiated backup import/export exist. `AppStore/description.txt` matches implemented features. `AppStore/icon.png` is generated source art (OpenAI Images `gpt-image-2.5-flare`); its resized variants are wired into Windows ICO, Android launcher mipmaps/adaptive icon and iOS AppIcon asset catalog. Windows/Android/iOS build evidence belongs to linked CI runs, not host. No mobile store submission or physical device testing claimed.
 
 Bundle/application ID: `com.infinityball.bedledger` on Android/iOS; Windows identity `cominfinityball.bedledger` where MSIX rules require no reverse-DNS dots after vendor. App Store Connect bundle registration: `CREATED com.infinityball.bedledger`. Repository Actions secrets configured: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (names only); TestFlight/Play submission deferred.
 
