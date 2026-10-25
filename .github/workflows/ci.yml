@@ -32,6 +32,16 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build windows --release
+      - name: Verify packaged Windows icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $exe = Resolve-Path 'build/windows/x64/runner/Release/bed_ledger.exe'
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe.Path)
+          if ($null -eq $icon) { throw 'Windows executable has no icon resource' }
+          if ($icon.Width -lt 32 -or $icon.Height -lt 32) { throw 'Windows icon is too small' }
+          Write-Output "Packaged Windows icon: $($icon.Width)x$($icon.Height)"
+          $icon.Dispose()
 
   android:
     name: Linux analysis, tests, Android debug build
@@ -52,6 +62,13 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --debug
+      - name: Verify APK launcher icons
+        run: |
+          set -eu
+          unzip -l build/app/outputs/flutter-apk/app-debug.apk > apk-list.txt
+          grep -F 'ic_launcher' apk-list.txt
+          test "$(grep -cF 'mipmap' apk-list.txt)" -ge 5
+          grep -F 'bed_icon_foreground' apk-list.txt
 
   ios:
     name: iOS simulator compile (unsigned)
@@ -65,3 +82,10 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: git diff --exit-code
       - run: flutter build ios --simulator --debug --no-codesign
+      - name: Verify compiled iOS icon catalog
+        run: |
+          set -eu
+          app=build/ios/iphonesimulator/Runner.app
+          test -s "$app/Assets.car"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' "$app/Info.plist" | grep -F AppIcon
+          printf 'iOS Assets.car present; CFBundlePrimaryIcon points to AppIcon\n'

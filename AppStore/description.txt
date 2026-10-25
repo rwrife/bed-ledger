@@ -1,7 +1,5 @@
-DRAFT LISTING COPY — features below are planned, not yet released.
+Bed Ledger helps home growers remember what they planted, where, and when. Create named beds with optional dimensions and notes. Record seasons, crop plantings, and harvest dates and amounts. Before planting again, browse each bed's history across seasons.
 
-Bed Ledger helps home growers remember what they planted, where, and when. Sketch your growing space as named beds, keep a season-by-season planting journal, and record harvest dates and amounts. Before the next planting, look back at a bed's own history instead of guessing.
+Made for Windows, Android phones and tablets, and iPhone/iPad. Your journal stays on your device. No account, ads, analytics, or location permission. Export a JSON backup or CSV harvest log when you choose; preview a JSON backup before importing it.
 
-Planned for Windows, Android phones and tablets, and iPhone/iPad. Data stays on your device. No account, ads, or location permission. Export a JSON backup or CSV harvest log when you choose.
-
-Bed Ledger is a personal record, not a source of plant identification, gardening advice, yield predictions or food-safety guidance.
+Bed Ledger is a personal record, not a source of plant identification, gardening advice, yield predictions, or food-safety guidance.
